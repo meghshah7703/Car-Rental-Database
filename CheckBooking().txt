@@ -1,0 +1,78 @@
+create trigger available before insert on booking for each row execute procedure checkBooking();
+
+set search_path to car_rental;
+create or replace function checkBooking() returns trigger as $body$
+DECLARE
+	d Driver%rowtype;
+	v vehicle%rowtype;
+	bk Booking%rowtype;
+	assigned driver.d_id%type;
+	give boolean;
+	flag boolean;
+	
+	
+BEGIN
+	flag='yes';
+	assigned=NEW.d_ID;
+	if(tg_op='INSERT') then
+		if(NEW.start_time>NEW.end_time)then
+			return NULL;
+		end if;
+		if(NEW.Driver_Requirement='yes') then
+
+			For bk in select * from booking
+			Loop
+				if(bk.Driver_Requirement='yes' AND bk.d_ID=NEW.d_ID) then
+						if(NEW.start_time<bk.end_time) then
+							flag='no';
+						end if;
+				end if;
+			End Loop;
+			
+			if(flag='no')then
+				For d in select * from driver
+				Loop
+					if(d.d_id!=NEW.d_id)then
+					give='yes';
+						for bk in select * from booking
+						Loop
+						
+							if(bk.d_id=d.d_id)then
+								if(bk.end_time>NEW.start_time)then
+									give='no';
+								end if;	
+							end if;
+						
+
+						End Loop;
+						if(give='yes')then
+							assigned=d.d_id;
+							EXIT;
+						end if;
+					end if;
+				End Loop;
+				if(assigned!=NEW.d_id)then
+					NEW.d_id=assigned;
+				else
+					return NULL;
+				end if;
+
+			end if;
+		else
+			NEW.d_id=NULL;	
+		end if;
+		For v in select * from Vehicle
+		LOOP
+			For bk in select * from booking
+			LOOP
+				if(bk.Vehicle_ID=NEW.Vehicle_ID) then
+					if(NEW.start_time<bk.end_time) then
+						return NULL;
+					end if;
+				end if;
+			End Loop;
+		End Loop;
+		return NEW;
+	end if;
+END;
+$body$ language 'plpgsql'

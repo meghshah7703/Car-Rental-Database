@@ -1,0 +1,68 @@
+create trigger calculate before insert on Billing for each row execute procedure calculateFinal();
+
+
+set search_path to car_rental;
+create or replace function calculateFinal() returns trigger as $body$
+DECLARE
+	d Driver%rowtype;
+	v Vehicle%rowtype;
+	a d_allowances%rowtype;
+	bk booking%rowtype;
+	totalday real;
+	totalmile real;
+	mybook booking%rowtype;
+	myveh vehicle%rowtype;
+	driver driver%rowtype;
+	allow d_allowances%rowtype;
+	tt real;
+	total real;
+BEGIN
+	tt:=0;
+	for bk in select * from booking
+	loop
+		if(bk.book_id=NEW.book_id)then
+			mybook=bk;
+		end if;
+		
+	end loop;
+	if(mybook.driver_requirement='no')then
+		NEW.driver_rating=NULL;
+	end if;
+	for v in select * from vehicle
+	loop
+		if(mybook.vehicle_id=v.vehicle_id)then
+			myveh=v;
+		end if;		
+	end loop;
+	if(mybook.driver_requirement='yes')then
+		for d in select * from driver
+		loop
+			if(mybook.d_id=d.d_id)then
+			driver=d;
+			end if;
+		end loop;
+		for a in select * from d_allowances
+		loop
+			if(driver.a_id=a.a_id)then
+			allow=a;
+			end if;
+		end loop;
+		tt:=tt+(mybook.end_time-mybook.start_time+1)*(allow.amount); 
+	end if;
+	totalmile:=(NEW.f_reading-NEW.init_reading)*(myveh.cost_per_mile)+tt;
+	totalday:=(mybook.end_time-mybook.start_time+1)*(myveh.cost_per_day)+tt;
+	if(totalmile>totalday)then
+		total=totalmile;
+	else
+		total=totalday;
+	end if;
+	NEW.tax_amount=total*(0.18);
+	NEW.total_amount=total+NEW.tax_amount;
+	return NEW;
+
+END;
+$body$ language 'plpgsql'
+
+
+
+

@@ -1,0 +1,36 @@
+create trigger CheckRatings before insert on Billing for each row execute procedure checkRating();
+
+
+set search_path to car_rental;
+create or replace function checkRating() returns trigger as $body$
+DECLARE
+	bk booking%rowtype;
+
+BEGIN
+
+	for bk in select * from booking
+	LOOP
+		if(NEW.Book_ID=bk.Book_ID)then
+			if(bk.Driver_Requirement='yes')then
+				if(NEW.Driver_Rating <1 or  NEW.Driver_Rating>5)then
+					return NULL;
+				else
+					if(NEW.veh_Rating <1 or  NEW.veh_Rating>5)then
+						return NULL;
+					else
+						return NEW;
+					end if;
+				end if;
+			else
+				NEW.Driver_Rating=0;
+				if(NEW.veh_Rating <1 or  NEW.veh_Rating>5)then
+					return NULL;
+				else
+					return NEW;
+				end if;
+			end if;
+		end if;
+	END LOOP;
+END;
+$body$ language 'plpgsql'
+
